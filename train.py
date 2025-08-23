@@ -375,21 +375,45 @@ def main():
     
     # Load dataset
     print(f"📚 Loading dataset: {args.dataset_name}")
-    dataset = load_dataset(args.dataset_name, split="train")
+    full_dataset = load_dataset(args.dataset_name, split="train")
     
-    # Prepare dataset
-    print("🔧 Processing dataset...")
-    processed_dataset = prepare_preference_dataset(
-        dataset,
+    # Split dataset: 90% train, 10% eval
+    print("🔄 Splitting dataset (90% train, 10% eval)...")
+    split_dataset = full_dataset.train_test_split(test_size=0.1, seed=args.seed)
+    train_dataset = split_dataset["train"]
+    eval_dataset = split_dataset["test"]
+    
+    print(f"   Train samples: {len(train_dataset)}")
+    print(f"   Eval samples: {len(eval_dataset)}")
+    
+    # Prepare datasets
+    print("🔧 Processing train dataset...")
+    processed_train_dataset = prepare_preference_dataset(
+        train_dataset,
         tokenizer,
         max_length=args.max_length
     )
     
-    # Create data loader
-    dataloader = DataLoader(
-        processed_dataset,
+    print("🔧 Processing eval dataset...")
+    processed_eval_dataset = prepare_preference_dataset(
+        eval_dataset,
+        tokenizer,
+        max_length=args.max_length
+    )
+    
+    # Create data loaders
+    train_dataloader = DataLoader(
+        processed_train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
+        num_workers=4,
+        pin_memory=True
+    )
+    
+    eval_dataloader = DataLoader(
+        processed_eval_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
         num_workers=4,
         pin_memory=True
     )
@@ -412,7 +436,7 @@ def main():
     )
     
     # Create scheduler
-    num_training_steps = len(dataloader) * args.num_epochs // args.grad_accum
+    num_training_steps = len(train_dataloader) * args.num_epochs // args.grad_accum
     scheduler = get_cosine_schedule_with_warmup(
         optimizer,
         num_warmup_steps=args.warmup_steps,
@@ -420,8 +444,8 @@ def main():
     )
     
     # Prepare for training
-    model, optimizer, dataloader, scheduler = accelerator.prepare(
-        model, optimizer, dataloader, scheduler
+    model, optimizer, train_dataloader, eval_dataloader, scheduler = accelerator.prepare(
+        model, optimizer, train_dataloader, eval_dataloader, scheduler
     )
     
     # Create trainer
@@ -440,7 +464,7 @@ def main():
         model.train()
         epoch_losses = []
         
-        progress_bar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{args.num_epochs}")
+        progress_bar = tqdm(train_dataloader, desc=f"Epoch {epoch+1}/{args.num_epochs}")
         
         for step, batch in enumerate(progress_bar):
             with accelerator.accumulate(model):
@@ -480,8 +504,22 @@ def main():
                 trainer.save_checkpoint(save_path, metrics)
         
         # Epoch summary
-        avg_loss = np.mean(epoch_losses)
-        print(f"📊 Epoch {epoch+1} - Average loss: {avg_loss:.4f}")
+        avg_train_loss = np.mean(epoch_losses)
+        print(f"📊 Epoch {epoch+1} - Average train loss: {avg_train_loss:.4f}")
+        
+        # Evaluation
+        print(f"🔍 Running evaluation...")
+        model.eval()
+        eval_losses = []
+        
+        with torch.no_grad():
+            for eval_batch in tqdm(eval_dataloader, desc="Evaluating"):
+                loss, eval_metrics = trainer.training_step(eval_batch)
+                eval_losses.append(eval_metrics["loss"])
+        
+        avg_eval_loss = np.mean(eval_losses)
+        print(f"📊 Epoch {epoch+1} - Average eval loss: {avg_eval_loss:.4f}")
+        print(f"📊 Epoch {epoch+1} - Train/Eval loss: {avg_train_loss:.4f}/{avg_eval_loss:.4f}")
     
     # Save final model
     save_path = os.path.join(args.output_dir, "final_gensteer.pt")
