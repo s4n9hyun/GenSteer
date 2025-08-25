@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""
-GenSteer Inference Module
-Paper: GenSteer: A Generative Steering Engine for Autonomous Test-Time Alignment
-
-High-performance inference utilities for GenSteer models with optimized generation.
-"""
+"""GenSteer inference utilities."""
 
 import torch
 import torch.nn.functional as F
@@ -18,7 +13,7 @@ from models import create_gensteer
 
 
 class GenSteerInference:
-    """Optimized inference engine for GenSteer models."""
+    """Inference engine for GenSteer models."""
     
     def __init__(
         self,
@@ -26,20 +21,10 @@ class GenSteerInference:
         base_model_name: str = "argsearch/llama-7b-sft-float32",
         device: str = "cuda",
         torch_dtype = torch.bfloat16,
-        steering_rank: int = 32,
+        bottleneck_dim: int = 32,
         max_steering_strength: float = 5.0
     ):
-        """
-        Initialize GenSteer inference engine.
-        
-        Args:
-            checkpoint_path: Path to trained GenSteer checkpoint
-            base_model_name: Base language model identifier
-            device: Device to run inference on
-            torch_dtype: Data type for inference
-            steering_rank: Rank of steering vector generation
-            max_steering_strength: Maximum steering strength
-        """
+        """Initialize GenSteer inference engine."""
         
         self.device = device
         self.torch_dtype = torch_dtype
@@ -54,7 +39,7 @@ class GenSteerInference:
         print(f"🚀 Loading GenSteer model from {checkpoint_path}")
         self.model = create_gensteer(
             base_model_name=base_model_name,
-            steering_rank=steering_rank,
+            bottleneck_dim=bottleneck_dim,
             max_steering_strength=max_steering_strength,
             device=device,
             torch_dtype=torch_dtype
@@ -69,12 +54,18 @@ class GenSteerInference:
         print("✅ GenSteer inference engine ready!")
     
     def _load_checkpoint(self, checkpoint_path: str):
-        """Load model checkpoint."""
+        """Load checkpoint."""
         
-        checkpoint = torch.load(checkpoint_path, map_location=self.device)
+        checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
         
-        # Load steering engine state
-        self.model.steering_engine.load_state_dict(checkpoint["steering_engine_state_dict"])
+        # Load steering engine state - handle both old and new checkpoint formats
+        if "steering_engine_state_dict" in checkpoint:
+            self.model.steering_engine.load_state_dict(checkpoint["steering_engine_state_dict"])
+        elif "alignment_model" in checkpoint:
+            # New format from training script
+            self.model.steering_engine.load_state_dict(checkpoint["alignment_model"])
+        else:
+            raise KeyError(f"Cannot find steering engine weights in checkpoint. Available keys: {checkpoint.keys()}")
         
         # Load training info if available
         self.training_info = {

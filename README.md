@@ -1,27 +1,12 @@
-# GenSteer: A Generative Steering Engine for Autonomous Test-Time Alignment
+# GenSteer
 
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-ee4c2c.svg)](https://pytorch.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+Dynamic steering engine for language model alignment.
 
-> **GenSteer** introduces a novel approach to language model alignment through dynamic steering vector generation and autonomous test-time adaptation. Unlike traditional methods that rely on fixed alignment strategies, GenSteer learns to generate optimal steering vectors contextually and automatically determines the appropriate alignment strength for each generation step.
+## Features
 
-## 🎯 Key Innovations
-
-### 🧠 Dynamic Steering Vector Generation
-- **Unlimited Expressivity**: Instead of combining fixed reference vectors, GenSteer dynamically generates optimal alignment vectors using a LoRA-style architecture
-- **Context-Aware Adaptation**: Each input context receives a uniquely generated steering vector tailored to its specific alignment needs
-- **Bottleneck Efficiency**: Low-rank decomposition (H→R→V) provides parameter efficiency while maintaining expressiveness
-
-### 🎛️ Autonomous Test-Time Alignment
-- **Automatic Strength Determination**: No manual alpha tuning required - the model learns to determine optimal alignment strength (0-5.0)
-- **Adaptive Response**: Steering strength varies dynamically based on context, from minimal intervention to strong alignment
-- **Gating Network**: Sophisticated neural network automatically calibrates alignment intensity
-
-### ⚡ Optimized Training & Inference
-- **50% Faster Training**: Single forward pass processes both chosen and rejected samples simultaneously
-- **Enhanced Exploration**: Increased maximum steering strength (5.0) allows better exploration of alignment space
-- **Advanced Regularization**: Steering variance and entropy regularization prevent mode collapse
+- Dynamic steering vector generation
+- Automatic alignment strength calibration
+- Bottleneck architecture for efficiency
 
 ## 🏗️ Architecture
 

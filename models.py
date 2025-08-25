@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""
-GenSteer: A Generative Steering Engine for Autonomous Test-Time Alignment
-Paper: GenSteer - Dynamic Steering Vector Generation for LLM Alignment
-
-Core model architecture implementing the Generative Steering Engine (GSE)
-that dynamically generates steering vectors for test-time alignment without manual tuning.
-"""
+"""GenSteer model architecture."""
 
 import torch
 import torch.nn as nn
@@ -15,7 +9,7 @@ from typing import Optional, Dict, Any, Tuple
 
 
 class BaseLanguageModel(nn.Module):
-    """Frozen base language model wrapper for GenSteer."""
+    """Frozen base language model wrapper."""
     
     def __init__(self, model_name: str, device: str = "cuda", torch_dtype: torch.dtype = torch.bfloat16):
         super().__init__()
@@ -78,21 +72,11 @@ class BaseLanguageModel(nn.Module):
 
 
 class GenerativeSteeringEngine(nn.Module):
-    """
-    Generative Steering Engine (GSE) - Core innovation of GenSteer.
-    
-    Dynamically generates steering vectors based on input context using a 
-    bottleneck architecture with automatic steering strength calibration.
-    
-    Key Features:
-    - Generative steering mechanism with unlimited expressivity
-    - Automatic steering strength calibration (0-5.0 range)
-    - Efficient bottleneck architecture for parameter efficiency
-    - Context-aware steering vector generation
-    """
+    """Generative Steering Engine with dynamic vector generation."""
     
     def __init__(self, hidden_size: int = 4096, vocab_size: int = 32000, 
                  bottleneck_dim: int = 32, max_seq_len: int = 2048, 
+                 max_steering_strength: float = 5.0,
                  device: str = "cuda", torch_dtype: torch.dtype = torch.bfloat16):
         super().__init__()
         
@@ -133,7 +117,7 @@ class GenerativeSteeringEngine(nn.Module):
         )
         
         # Maximum steering strength (expanded range for better exploration)
-        self.max_steering_strength = 5.0
+        self.max_steering_strength = max_steering_strength
         
         # Initialize parameters optimally
         self._initialize_parameters()
@@ -160,7 +144,7 @@ class GenerativeSteeringEngine(nn.Module):
                         nn.init.zeros_(layer.bias)
     
     def adaptive_pool(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        """Adaptively resize hidden states to match expected dimensions."""
+        """Resize hidden states to match expected dimensions."""
         batch_size, seq_len, hidden_dim = hidden_states.shape
         
         if hidden_dim == self.hidden_size:
@@ -214,7 +198,7 @@ class GenerativeSteeringEngine(nn.Module):
             steering_strength: Calibrated steering strength [B, 1]
         """
         
-        # Adaptive pooling for dimension compatibility
+        # Adaptive pooling for dimension compatibility  
         pooled_states = self.adaptive_pool(hidden_states)  # [B, L, H]
         batch_size, seq_len, hidden_size = pooled_states.shape
         
@@ -254,18 +238,7 @@ class GenerativeSteeringEngine(nn.Module):
 
 
 class GenSteer(nn.Module):
-    """
-    GenSteer: Complete Generative Steering System for Test-Time Alignment.
-    
-    Combines a frozen base language model with the Generative Steering Engine
-    to enable dynamic, context-aware alignment without manual tuning.
-    
-    Key Advantages:
-    - No manual hyperparameter tuning required
-    - Adapts to each input context automatically
-    - Efficient parameter usage (14M trainable params)
-    - 50% faster training with optimized architecture
-    """
+    """Complete GenSteer system with base model and steering engine."""
     
     def __init__(self, base_model: BaseLanguageModel, steering_engine: GenerativeSteeringEngine):
         super().__init__()
@@ -278,7 +251,7 @@ class GenSteer(nn.Module):
             f"Vocabulary mismatch: base={base_model.vocab_size}, steering={steering_engine.vocab_size}"
     
     def get_system_info(self) -> Dict[str, Any]:
-        """Get complete system information."""
+        """Get system information."""
         base_info = self.base_model.get_model_info()
         engine_info = self.steering_engine.get_engine_info()
         
@@ -424,7 +397,7 @@ class GenSteer(nn.Module):
 def create_gensteer(base_model_name: str = "argsearch/llama-7b-sft-float32", 
                     device: str = "cuda", torch_dtype: torch.dtype = torch.bfloat16,
                     hidden_size: int = 4096, vocab_size: Optional[int] = None, 
-                    bottleneck_dim: int = 32) -> GenSteer:
+                    bottleneck_dim: int = 32, max_steering_strength: float = 5.0) -> GenSteer:
     """
     Factory function to create a GenSteer model.
     
@@ -435,6 +408,7 @@ def create_gensteer(base_model_name: str = "argsearch/llama-7b-sft-float32",
         hidden_size: Hidden dimension of the model
         vocab_size: Vocabulary size (auto-detected if None)
         bottleneck_dim: Bottleneck dimension for steering generation
+        max_steering_strength: Maximum steering strength
         
     Returns:
         Complete GenSteer model ready for training or inference
@@ -452,6 +426,7 @@ def create_gensteer(base_model_name: str = "argsearch/llama-7b-sft-float32",
         hidden_size=hidden_size,
         vocab_size=vocab_size,
         bottleneck_dim=bottleneck_dim,
+        max_steering_strength=max_steering_strength,
         device=device,
         torch_dtype=torch_dtype
     )

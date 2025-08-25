@@ -20,8 +20,8 @@ LAMBDA_L2=${LAMBDA_L2:-0.001}  # L2 regularization for steering vectors
 LAMBDA_STEERING=${LAMBDA_STEERING:-0.01}  # Steering variance regularization
 LAMBDA_ENTROPY=${LAMBDA_ENTROPY:-0.01}  # Entropy regularization to prevent repetition
 LR=${LR:-1e-5}  # Learning rate for steering engine
-BATCH_SIZE=${BATCH_SIZE:-4}  # Batch size per device
-GRAD_ACCUM=${GRAD_ACCUM:-4}  # Gradient accumulation (effective batch size = 16)
+BATCH_SIZE=${BATCH_SIZE:-16}  # Batch size per device
+GRAD_ACCUM=${GRAD_ACCUM:-2}  # Gradient accumulation (effective batch size = 16)
 
 # GenSteer specific parameters
 STEERING_RANK=${STEERING_RANK:-32}  # Rank for dynamic steering vector generation
@@ -39,10 +39,10 @@ if [ -d "${OUTPUT_DIR}" ]; then
     echo "Directory '${OUTPUT_DIR}' already exists."
     
     # Find latest checkpoint
-    LATEST_CHECKPOINT=$(ls -t ${OUTPUT_DIR}/gensteer_step_*.pt 2>/dev/null | head -n1)
+    LATEST_CHECKPOINT=$(ls -t ${OUTPUT_DIR}/checkpoint-*.pt 2>/dev/null | head -n1)
     
     if [ -n "$LATEST_CHECKPOINT" ]; then
-        STEP=$(basename $LATEST_CHECKPOINT | grep -oP 'step_\K[0-9]+')
+        STEP=$(basename $LATEST_CHECKPOINT | grep -oP 'checkpoint-\K[0-9]+')
         echo "Found checkpoint at step $STEP"
         echo "Will resume from: $LATEST_CHECKPOINT"
         RESUME_CHECKPOINT=$LATEST_CHECKPOINT
@@ -90,7 +90,7 @@ CMD="CUDA_VISIBLE_DEVICES=0 accelerate launch --num_processes=1 train.py \
     --lambda_l2 $LAMBDA_L2 \
     --lambda_steering $LAMBDA_STEERING \
     --lambda_entropy $LAMBDA_ENTROPY \
-    --steering_rank $STEERING_RANK \
+    --bottleneck_dim $STEERING_RANK \
     --max_steering_strength $MAX_STEERING_STRENGTH \
     --bf16 \
     --seed 42"
