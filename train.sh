@@ -25,7 +25,7 @@ GRAD_ACCUM=${GRAD_ACCUM:-2}  # Gradient accumulation (effective batch size = 16)
 
 # GenSteer specific parameters
 STEERING_RANK=${STEERING_RANK:-32}  # Rank for dynamic steering vector generation
-MAX_STEERING_STRENGTH=${MAX_STEERING_STRENGTH:-5.0}  # Maximum steering strength (increased from 3.0)
+MAX_STEERING_STRENGTH=${MAX_STEERING_STRENGTH:-10.0}  # Maximum steering strength (increased from 3.0)
 
 # Automatically generate experiment name
 DATASET_SHORT=$(echo $DATASET_NAME | cut -d'/' -f2 | cut -d'-' -f1-2)  # "full-hh" from "Dahoas/full-hh-rlhf"
