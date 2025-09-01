@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""GenSteer inference utilities."""
+"""CALM inference utilities."""
 
 import torch
 import torch.nn.functional as F
@@ -9,11 +9,11 @@ import json
 import numpy as np
 from pathlib import Path
 
-from models import create_gensteer
+from models import create_calm_model
 
 
-class GenSteerInference:
-    """Inference engine for GenSteer models."""
+class CALMInference:
+    """Inference engine for CALM models."""
     
     def __init__(
         self,
@@ -22,9 +22,9 @@ class GenSteerInference:
         device: str = "cuda",
         torch_dtype = torch.bfloat16,
         bottleneck_dim: int = 32,
-        max_steering_strength: float = 5.0
+        max_modulation_strength: float = 5.0
     ):
-        """Initialize GenSteer inference engine."""
+        """Initialize CALM inference engine."""
         
         self.device = device
         self.torch_dtype = torch_dtype
@@ -36,11 +36,11 @@ class GenSteerInference:
             self.tokenizer.pad_token = self.tokenizer.eos_token
         
         # Create model
-        print(f"🚀 Loading GenSteer model from {checkpoint_path}")
-        self.model = create_gensteer(
+        print(f"🚀 Loading CALM model from {checkpoint_path}")
+        self.model = create_calm_model(
             base_model_name=base_model_name,
             bottleneck_dim=bottleneck_dim,
-            max_steering_strength=max_steering_strength,
+            max_modulation_strength=max_modulation_strength,
             device=device,
             torch_dtype=torch_dtype
         )
@@ -51,21 +51,24 @@ class GenSteerInference:
         # Set to evaluation mode
         self.model.eval()
         
-        print("✅ GenSteer inference engine ready!")
+        print("✅ CALM inference engine ready!")
     
     def _load_checkpoint(self, checkpoint_path: str):
         """Load checkpoint."""
         
         checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
         
-        # Load steering engine state - handle both old and new checkpoint formats
-        if "steering_engine_state_dict" in checkpoint:
-            self.model.steering_engine.load_state_dict(checkpoint["steering_engine_state_dict"])
+        # Load modulation engine state - handle both old and new checkpoint formats
+        if "modulation_engine_state_dict" in checkpoint:
+            self.model.modulation_engine.load_state_dict(checkpoint["modulation_engine_state_dict"])
         elif "alignment_model" in checkpoint:
             # New format from training script
-            self.model.steering_engine.load_state_dict(checkpoint["alignment_model"])
+            self.model.modulation_engine.load_state_dict(checkpoint["alignment_model"])
+        elif "steering_engine_state_dict" in checkpoint:
+            # Legacy format compatibility
+            self.model.modulation_engine.load_state_dict(checkpoint["steering_engine_state_dict"])
         else:
-            raise KeyError(f"Cannot find steering engine weights in checkpoint. Available keys: {checkpoint.keys()}")
+            raise KeyError(f"Cannot find modulation engine weights in checkpoint. Available keys: {checkpoint.keys()}")
         
         # Load training info if available
         self.training_info = {
@@ -77,8 +80,11 @@ class GenSteerInference:
         print(f"✅ Loaded checkpoint from step {self.training_info['global_step']}")
         if "metrics" in checkpoint:
             metrics = checkpoint["metrics"]
-            if "avg_steering_strength" in metrics:
-                print(f"   Avg steering: {metrics['avg_steering_strength']:.2f}±{metrics.get('std_steering_strength', 0):.2f}")
+            if "avg_modulation_strength" in metrics:
+                print(f"   Avg modulation: {metrics['avg_modulation_strength']:.2f}±{metrics.get('std_modulation_strength', 0):.2f}")
+            elif "avg_steering_strength" in metrics:
+                # Legacy compatibility
+                print(f"   Avg modulation: {metrics['avg_steering_strength']:.2f}±{metrics.get('std_steering_strength', 0):.2f}")
     
     def generate_response(
         self,
@@ -90,7 +96,7 @@ class GenSteerInference:
         return_steering_info: bool = False
     ) -> Union[str, Tuple[str, Dict]]:
         """
-        Generate a response with automatic steering.
+        Generate a response with automatic modulation.
         
         Args:
             prompt: Input prompt
@@ -98,10 +104,10 @@ class GenSteerInference:
             temperature: Sampling temperature
             top_p: Top-p (nucleus) sampling parameter
             do_sample: Whether to use sampling or greedy decoding
-            return_steering_info: Whether to return steering statistics
+            return_steering_info: Whether to return modulation statistics
         
         Returns:
-            Generated response (and optionally steering info)
+            Generated response (and optionally modulation info)
         """
         
         # Tokenize input
@@ -112,9 +118,9 @@ class GenSteerInference:
             max_length=1024
         ).to(self.device)
         
-        # Generate with steering
+        # Generate with modulation
         with torch.no_grad():
-            generated_ids, stats = self.model.generate_with_steering(
+            generated_ids, stats = self.model.generate_with_modulation(
                 input_ids=inputs["input_ids"],
                 attention_mask=inputs.get("attention_mask"),
                 max_length=max_length,
@@ -154,7 +160,7 @@ class GenSteerInference:
             batch_size: Batch size for processing
         
         Returns:
-            List of response dictionaries with steering info
+            List of response dictionaries with modulation info
         """
         
         results = []
@@ -164,7 +170,7 @@ class GenSteerInference:
             batch_results = []
             
             for prompt in batch_prompts:
-                response, steering_info = self.generate_response(
+                response, modulation_info = self.generate_response(
                     prompt=prompt,
                     max_length=max_length,
                     temperature=temperature,
@@ -176,7 +182,7 @@ class GenSteerInference:
                 batch_results.append({
                     "prompt": prompt,
                     "response": response,
-                    "steering_info": steering_info
+                    "modulation_info": modulation_info
                 })
             
             results.extend(batch_results)
@@ -192,14 +198,14 @@ class GenSteerInference:
         do_sample: bool = True
     ) -> Dict:
         """
-        Compare GenSteer response with base model response.
+        Compare CALM response with base model response.
         
         Returns:
-            Dictionary with both responses and steering analysis
+            Dictionary with both responses and modulation analysis
         """
         
-        # Generate with GenSteer
-        gensteer_response, steering_info = self.generate_response(
+        # Generate with CALM
+        calm_response, modulation_info = self.generate_response(
             prompt=prompt,
             max_length=max_length,
             temperature=temperature,
@@ -242,10 +248,10 @@ class GenSteerInference:
         
         return {
             "prompt": prompt,
-            "gensteer_response": gensteer_response,
+            "calm_response": calm_response,
             "base_response": base_response,
-            "steering_info": steering_info,
-            "steering_active": steering_info.get("avg_steering_strength", 0) > 0.1
+            "modulation_info": modulation_info,
+            "modulation_active": modulation_info.get("avg_modulation_strength", 0) > 0.1
         }
     
     def _generate_with_logits(
@@ -298,52 +304,58 @@ class GenSteerInference:
         
         return generated
     
-    def analyze_steering_patterns(
+    def analyze_modulation_patterns(
         self,
         prompts: List[str],
         max_length: int = 256
     ) -> Dict:
         """
-        Analyze steering patterns across multiple prompts.
+        Analyze modulation patterns across multiple prompts.
         
         Returns:
-            Analysis of steering behavior patterns
+            Analysis of modulation behavior patterns
         """
         
         results = self.batch_generate(prompts, max_length=max_length)
         
-        # Extract steering strengths
-        steering_strengths = []
-        steering_variances = []
+        # Extract modulation strengths
+        modulation_strengths = []
+        modulation_variances = []
         
         for result in results:
-            info = result["steering_info"]
-            if "learned_steering_strengths" in info:
-                strengths = info["learned_steering_strengths"]
-                steering_strengths.extend(strengths)
+            info = result["modulation_info"]
+            if "modulation_strengths" in info:
+                strengths = info["modulation_strengths"]
+                modulation_strengths.extend(strengths)
                 if len(strengths) > 1:
-                    steering_variances.append(np.var(strengths))
+                    modulation_variances.append(np.var(strengths))
+            elif "learned_steering_strengths" in info:
+                # Legacy compatibility
+                strengths = info["learned_steering_strengths"]
+                modulation_strengths.extend(strengths)
+                if len(strengths) > 1:
+                    modulation_variances.append(np.var(strengths))
         
-        if not steering_strengths:
-            return {"error": "No steering information available"}
+        if not modulation_strengths:
+            return {"error": "No modulation information available"}
         
         analysis = {
             "total_generations": len(results),
-            "total_tokens": len(steering_strengths),
-            "steering_statistics": {
-                "mean": np.mean(steering_strengths),
-                "std": np.std(steering_strengths),
-                "min": np.min(steering_strengths),
-                "max": np.max(steering_strengths),
-                "median": np.median(steering_strengths),
+            "total_tokens": len(modulation_strengths),
+            "modulation_statistics": {
+                "mean": np.mean(modulation_strengths),
+                "std": np.std(modulation_strengths),
+                "min": np.min(modulation_strengths),
+                "max": np.max(modulation_strengths),
+                "median": np.median(modulation_strengths),
             },
             "variance_statistics": {
-                "mean_variance": np.mean(steering_variances) if steering_variances else 0,
-                "adaptive_steering": np.mean(steering_variances) > 0.1 if steering_variances else False,
+                "mean_variance": np.mean(modulation_variances) if modulation_variances else 0,
+                "adaptive_modulation": np.mean(modulation_variances) > 0.1 if modulation_variances else False,
             },
             "utilization": {
-                "active_steering_ratio": np.mean(np.array(steering_strengths) > 0.5),
-                "high_steering_ratio": np.mean(np.array(steering_strengths) > 2.0),
+                "active_modulation_ratio": np.mean(np.array(modulation_strengths) > 0.5),
+                "high_modulation_ratio": np.mean(np.array(modulation_strengths) > 2.0),
             }
         }
         
@@ -355,36 +367,36 @@ class GenSteerInference:
         system_info = self.model.get_system_info()
         
         info = {
-            "model_type": "GenSteer",
+            "model_type": "CALM",
             "checkpoint_path": self.checkpoint_path,
             "training_info": self.training_info,
             "system_info": system_info,
-            "architecture": "Generative Steering Engine with Autonomous Test-Time Alignment",
+            "architecture": "Controllable Alignment via Logit Modulation",
         }
         
         return info
 
 
-def load_gensteer_inference(
+def load_calm_inference(
     checkpoint_path: str,
     base_model_name: str = "argsearch/llama-7b-sft-float32",
     device: str = "cuda",
     **kwargs
-) -> GenSteerInference:
+) -> CALMInference:
     """
-    Convenience function to load GenSteer inference engine.
+    Convenience function to load CALM inference engine.
     
     Args:
         checkpoint_path: Path to trained checkpoint
         base_model_name: Base model identifier
         device: Device for inference
-        **kwargs: Additional arguments for GenSteerInference
+        **kwargs: Additional arguments for CALMInference
     
     Returns:
-        Ready-to-use GenSteerInference instance
+        Ready-to-use CALMInference instance
     """
     
-    return GenSteerInference(
+    return CALMInference(
         checkpoint_path=checkpoint_path,
         base_model_name=base_model_name,
         device=device,
@@ -392,11 +404,17 @@ def load_gensteer_inference(
     )
 
 
+# Backward compatibility alias
+def load_gensteer_inference(*args, **kwargs):
+    """Backward compatibility alias for load_calm_inference."""
+    return load_calm_inference(*args, **kwargs)
+
+
 if __name__ == "__main__":
     # Example usage
     import argparse
     
-    parser = argparse.ArgumentParser(description="GenSteer Inference")
+    parser = argparse.ArgumentParser(description="CALM Inference")
     parser.add_argument("--checkpoint", type=str, required=True, help="Path to checkpoint")
     parser.add_argument("--prompt", type=str, default="Hello, how can I help you today?")
     parser.add_argument("--max_length", type=int, default=256)
@@ -406,7 +424,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     # Initialize inference engine
-    engine = load_gensteer_inference(args.checkpoint)
+    engine = load_calm_inference(args.checkpoint)
     
     print(f"🎯 Generating response for: {args.prompt}")
     
@@ -418,18 +436,18 @@ if __name__ == "__main__":
             temperature=args.temperature
         )
         
-        print("\n🤖 GenSteer Response:")
-        print(result["gensteer_response"])
-        print(f"\n🔧 Steering: {result['steering_info']['avg_steering_strength']:.2f}")
+        print("\n🤖 CALM Response:")
+        print(result["calm_response"])
+        print(f"\n🔧 Modulation: {result['modulation_info']['avg_modulation_strength']:.2f}")
         
         print("\n📝 Base Model Response:")
         print(result["base_response"])
         
-        print(f"\n🎛️  Steering Active: {result['steering_active']}")
+        print(f"\n🎛️  Modulation Active: {result['modulation_active']}")
         
     else:
-        # Generate with GenSteer
-        response, steering_info = engine.generate_response(
+        # Generate with CALM
+        response, modulation_info = engine.generate_response(
             prompt=args.prompt,
             max_length=args.max_length,
             temperature=args.temperature,
@@ -437,4 +455,4 @@ if __name__ == "__main__":
         )
         
         print(f"\n🤖 Response: {response}")
-        print(f"🔧 Avg Steering: {steering_info.get('avg_steering_strength', 0):.2f}")
+        print(f"🔧 Avg Modulation: {modulation_info.get('avg_modulation_strength', 0):.2f}")

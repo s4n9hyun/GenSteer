@@ -50,24 +50,60 @@ class PreferenceDataset(Dataset):
 
 def load_preference_data(dataset_name="Dahoas/full-hh-rlhf", split="train"):
     """Load preference dataset with flexible dataset support."""
+    # Handle UltraFeedback dataset splits
+    if "ultrafeedback" in dataset_name.lower() and split == "train":
+        split = "train_prefs"  # Use preference training split for UltraFeedback
+    
     hf_dataset = load_dataset(dataset_name, split=split)
     
     data = []
     for item in hf_dataset:
         # Support different dataset formats
         if "prompt" in item and "chosen" in item and "rejected" in item:
-            # Standard format (Dahoas/full-hh-rlhf, Anthropic/hh-rlhf)
-            data.append({
-                "prompt": item["prompt"],
-                "chosen": item["chosen"],
-                "rejected": item["rejected"]
-            })
+            # Check if chosen/rejected are dict objects (UltraFeedback format)
+            if isinstance(item["chosen"], dict) and isinstance(item["rejected"], dict):
+                # UltraFeedback format: chosen/rejected have 'content' field
+                chosen_content = item["chosen"].get("content", "")
+                rejected_content = item["rejected"].get("content", "")
+                
+                # Ensure content is string
+                if not isinstance(chosen_content, str):
+                    chosen_content = str(chosen_content) if chosen_content else ""
+                if not isinstance(rejected_content, str):
+                    rejected_content = str(rejected_content) if rejected_content else ""
+                
+                # Ensure prompt is string  
+                prompt = item["prompt"]
+                if not isinstance(prompt, str):
+                    prompt = str(prompt) if prompt else ""
+                
+                data.append({
+                    "prompt": prompt,
+                    "chosen": chosen_content,
+                    "rejected": rejected_content
+                })
+            else:
+                # Standard format (Dahoas/full-hh-rlhf, Anthropic/hh-rlhf)
+                # Ensure all fields are strings
+                prompt = str(item["prompt"]) if item["prompt"] else ""
+                chosen = str(item["chosen"]) if item["chosen"] else ""
+                rejected = str(item["rejected"]) if item["rejected"] else ""
+                
+                data.append({
+                    "prompt": prompt,
+                    "chosen": chosen,
+                    "rejected": rejected
+                })
         elif "question" in item and "chosen" in item and "rejected" in item:
             # Alternative format with 'question' instead of 'prompt'
+            prompt = str(item["question"]) if item["question"] else ""
+            chosen = str(item["chosen"]) if item["chosen"] else ""
+            rejected = str(item["rejected"]) if item["rejected"] else ""
+            
             data.append({
-                "prompt": item["question"],
-                "chosen": item["chosen"],
-                "rejected": item["rejected"]
+                "prompt": prompt,
+                "chosen": chosen,
+                "rejected": rejected
             })
         elif "conversations" in item:
             # OpenAI format or other conversation formats
@@ -83,3 +119,8 @@ def load_preference_data(dataset_name="Dahoas/full-hh-rlhf", split="train"):
 def load_hh_rlhf_data(split="train"):
     """Load HH-RLHF dataset (backward compatibility)."""
     return load_preference_data("Dahoas/full-hh-rlhf", split=split)
+
+
+def load_ultrafeedback_data(split="train_prefs"):
+    """Load UltraFeedback binarized dataset."""
+    return load_preference_data("HuggingFaceH4/ultrafeedback_binarized", split=split)

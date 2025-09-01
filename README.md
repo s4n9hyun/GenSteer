@@ -1,10 +1,10 @@
-# GenSteer
+# CALM
 
-Dynamic steering engine for language model alignment.
+Controllable Alignment via Logit Modulation.
 
 ## Features
 
-- Dynamic steering vector generation
+- Dynamic modulation vector generation
 - Automatic alignment strength calibration
 - Bottleneck architecture for efficiency
 
@@ -13,26 +13,26 @@ Dynamic steering engine for language model alignment.
 ```
 Input Context → Base Language Model (Frozen)
        ↓
-Hidden States → Position Encoding → Down-Proj (H→R) → Up-Proj (R→V) → Steering Vector
+Hidden States → Position Encoding → Down-Proj (H→R) → Up-Proj (R→V) → Modulation Vector
        ↓                                                                      ↓
-Context Vector → Gating Network → Steering Strength ────────────────────────→ ×
+Context Vector → Gating Network → Modulation Strength ────────────────────────→ ×
        ↓                                                                      ↓
-Base Logits + (Steering Strength × Steering Vector) = Aligned Logits
+Base Logits + (Modulation Strength × Modulation Vector) = Aligned Logits
 ```
 
 ### Components
 - **Base Language Model**: Frozen transformer (e.g., LLaMA-7B)
-- **Generative Steering Engine**: Dynamic vector generator with LoRA-style architecture
+- **Logit Modulation Engine**: Dynamic vector generator with LoRA-style architecture
 - **Gating Network**: Multi-layer network for automatic strength determination
-- **Integration Layer**: Combines base logits with contextually generated steering
+- **Integration Layer**: Combines base logits with contextually generated modulation
 
 ## 🚀 Quick Start
 
 ### Installation
 
 ```bash
-git clone https://github.com/your-org/gensteer.git
-cd gensteer
+git clone https://github.com/your-org/calm.git
+cd calm
 pip install -r requirements.txt
 ```
 
@@ -43,10 +43,10 @@ pip install -r requirements.txt
 ./train.sh
 
 # Custom hyperparameters
-EPOCH=2 BATCH_SIZE=8 STEERING_RANK=64 MAX_STEERING_STRENGTH=7.0 ./train.sh
+EPOCH=2 BATCH_SIZE=8 BOTTLENECK_DIM=64 MAX_MODULATION_STRENGTH=7.0 ./train.sh
 
 # Resume from checkpoint
-./train.sh --resume_from_checkpoint ./outputs/gensteer/checkpoint.pt
+./train.sh --resume_from_checkpoint ./outputs/calm/checkpoint.pt
 ```
 
 ### Inference
@@ -68,25 +68,25 @@ python generate.py --checkpoint model.pt --prompts_file prompts.json --output re
 ### Programmatic Usage
 
 ```python
-from inference import load_gensteer_inference
+from inference import load_calm_inference
 
 # Load model
-engine = load_gensteer_inference("path/to/checkpoint.pt")
+engine = load_calm_inference("path/to/checkpoint.pt")
 
-# Generate response with automatic steering
-response, steering_info = engine.generate_response(
+# Generate response with automatic modulation
+response, modulation_info = engine.generate_response(
     "How can I be more helpful?",
     return_steering_info=True
 )
 
 print(f"Response: {response}")
-print(f"Steering: {steering_info['avg_steering_strength']:.3f}")
+print(f"Modulation: {modulation_info['avg_modulation_strength']:.3f}")
 
 # Compare with base model
 result = engine.compare_with_base("Explain quantum computing")
-print(f"GenSteer: {result['gensteer_response']}")
+print(f"CALM: {result['calm_response']}")
 print(f"Base: {result['base_response']}")
-print(f"Steering Active: {result['steering_active']}")
+print(f"Modulation Active: {result['modulation_active']}")
 ```
 
 ## 📊 Performance
@@ -94,19 +94,19 @@ print(f"Steering Active: {result['steering_active']}")
 ### Training Efficiency
 - **50% faster** than traditional preference learning methods
 - **Single forward pass** optimization for both chosen/rejected samples
-- **Memory efficient** with frozen base model and low-rank steering generation
+- **Memory efficient** with frozen base model and low-rank modulation generation
 
 ### Alignment Quality
 - **Dynamic adaptation** to context-specific alignment needs
 - **Reduced mode collapse** through entropy regularization
-- **Enhanced exploration** with 5.0 maximum steering strength
+- **Enhanced exploration** with 5.0 maximum modulation strength
 - **Automatic calibration** eliminates manual hyperparameter tuning
 
-### Steering Statistics (Example)
+### Modulation Statistics (Example)
 ```
-Average Steering Strength: 2.8 ± 1.2
-Utilization Rate: 85% (active steering > 0.5)
-High-Intensity Rate: 35% (steering > 2.0)
+Average Modulation Strength: 2.8 ± 1.2
+Utilization Rate: 85% (active modulation > 0.5)
+High-Intensity Rate: 35% (modulation > 2.0)
 Exploration Range: 0.1 - 4.8
 ```
 
@@ -116,28 +116,28 @@ Exploration Range: 0.1 - 4.8
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `steering_rank` | 32 | Rank for steering vector generation |
-| `max_steering_strength` | 5.0 | Maximum steering strength |
+| `bottleneck_dim` | 32 | Bottleneck dimension for modulation vector generation |
+| `max_modulation_strength` | 5.0 | Maximum modulation strength |
 | `beta` | 0.1 | DPO temperature parameter |
 | `lambda_l2` | 0.001 | L2 regularization weight |
-| `lambda_steering` | 0.01 | Steering variance regularization |
+| `lambda_strength_variance` | 0.01 | Modulation strength variance regularization |
 | `lambda_entropy` | 0.01 | Entropy regularization weight |
-| `learning_rate` | 1e-5 | Learning rate for steering engine |
+| `learning_rate` | 1e-5 | Learning rate for modulation engine |
 
 ### Model Architecture
 
 | Component | Parameters | Description |
 |-----------|------------|-------------|
 | Base Model | ~7B (frozen) | Frozen language model |
-| Steering Engine | ~8M | Dynamic vector generation |
+| Modulation Engine | ~8M | Dynamic vector generation |
 | Gating Network | ~1M | Automatic strength determination |
 | **Total Trainable** | **~9M** | **Only 0.13% of base model** |
 
 ## 📁 Project Structure
 
 ```
-gensteer/
-├── models.py          # Core GenSteer architecture
+calm/
+├── models.py          # Core CALM architecture
 ├── train.py           # Optimized training script
 ├── inference.py       # Inference engine
 ├── data.py           # Data processing utilities
@@ -147,7 +147,7 @@ gensteer/
 └── README.md        # This file
 
 outputs/
-├── gensteer/         # Training outputs
+├── calm/         # Training outputs
 │   ├── checkpoints/  # Model checkpoints
 │   ├── logs/        # Training logs
 │   └── configs/     # Saved configurations
@@ -170,39 +170,39 @@ dataset = load_preference_dataset(
 )
 ```
 
-### Steering Analysis
+### Modulation Analysis
 
 ```python
-from inference import load_gensteer_inference
+from inference import load_calm_inference
 
-engine = load_gensteer_inference("model.pt")
+engine = load_calm_inference("model.pt")
 
-# Analyze steering patterns
+# Analyze modulation patterns
 prompts = ["Help me with...", "Explain to me...", "What should I..."]
-analysis = engine.analyze_steering_patterns(prompts)
+analysis = engine.analyze_modulation_patterns(prompts)
 
-print(f"Average steering: {analysis['steering_statistics']['mean']:.3f}")
-print(f"Steering variance: {analysis['variance_statistics']['mean_variance']:.3f}")
-print(f"Utilization rate: {analysis['utilization']['active_steering_ratio']:.1%}")
+print(f"Average modulation: {analysis['modulation_statistics']['mean']:.3f}")
+print(f"Modulation variance: {analysis['variance_statistics']['mean_variance']:.3f}")
+print(f"Utilization rate: {analysis['utilization']['active_modulation_ratio']:.1%}")
 ```
 
 ### Custom Training
 
 ```python
-from models import create_gensteer
-from train import GenSteerTrainer
+from models import create_calm_model
+from train import CALMTrainer
 from accelerate import Accelerator
 
 # Create model
-model = create_gensteer(
+model = create_calm_model(
     base_model_name="your/base-model",
-    steering_rank=64,
-    max_steering_strength=10.0
+    bottleneck_dim=64,
+    max_modulation_strength=10.0
 )
 
 # Setup training
 accelerator = Accelerator()
-trainer = GenSteerTrainer(model, tokenizer, args, accelerator)
+trainer = CALMTrainer(model, tokenizer, args, accelerator)
 
 # Custom training loop
 for batch in dataloader:
@@ -218,13 +218,13 @@ for batch in dataloader:
 # Generate evaluation prompts
 python generate.py --checkpoint model.pt --eval_domain helpful_assistant --num_eval 100 --output eval_results.json
 
-# Analyze steering patterns
-python generate.py --checkpoint model.pt --prompts_file test_prompts.txt --analyze_steering
+# Analyze modulation patterns
+python generate.py --checkpoint model.pt --prompts_file test_prompts.txt --analyze_modulation
 ```
 
 ### Manual Evaluation
 
-Use the interactive mode to manually assess response quality and steering behavior:
+Use the interactive mode to manually assess response quality and modulation behavior:
 
 ```bash
 python generate.py --checkpoint model.pt --interactive
@@ -247,8 +247,8 @@ Commands in interactive mode:
 - **Parameter Efficiency**: 99.87% fewer trainable parameters
 - **Adaptation**: Dynamic vs. fixed alignment strategies
 
-### Steering Effectiveness
-- **Context Sensitivity**: Steering strength correlates 0.85 with content complexity
+### Modulation Effectiveness
+- **Context Sensitivity**: Modulation strength correlates 0.85 with content complexity
 - **Automatic Calibration**: 92% accuracy in appropriate strength selection
 - **Stability**: Low variance in repeated generations (σ < 0.3)
 
@@ -262,16 +262,16 @@ Commands in interactive mode:
 BATCH_SIZE=2 GRAD_ACCUM=8 ./train.sh
 ```
 
-**Low Steering Utilization**
+**Low Modulation Utilization**
 ```bash
-# Increase maximum steering strength
-MAX_STEERING_STRENGTH=7.0 ./train.sh
+# Increase maximum modulation strength
+MAX_MODULATION_STRENGTH=7.0 ./train.sh
 ```
 
 **Training Instability**
 ```bash
 # Increase regularization
-LAMBDA_L2=0.01 LAMBDA_STEERING=0.05 ./train.sh
+LAMBDA_L2=0.01 LAMBDA_STRENGTH_VARIANCE=0.05 ./train.sh
 ```
 
 ### Performance Optimization
@@ -289,12 +289,12 @@ LAMBDA_L2=0.01 LAMBDA_STEERING=0.05 ./train.sh
 ## 📚 Citation
 
 ```bibtex
-@article{gensteer2024,
-  title={GenSteer: A Generative Steering Engine for Autonomous Test-Time Alignment},
+@article{calm2024,
+  title={CALM: Controllable Alignment via Logit Modulation},
   author={[Authors]},
   journal={[Venue]},
   year={2024},
-  url={https://github.com/your-org/gensteer}
+  url={https://github.com/your-org/calm}
 }
 ```
 
@@ -305,8 +305,8 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 ### Development Setup
 
 ```bash
-git clone https://github.com/your-org/gensteer.git
-cd gensteer
+git clone https://github.com/your-org/calm.git
+cd calm
 pip install -e .
 pre-commit install
 ```
@@ -315,7 +315,7 @@ pre-commit install
 
 ```bash
 python -m pytest tests/
-python -m pytest tests/ --cov=gensteer
+python -m pytest tests/ --cov=calm
 ```
 
 ## 📄 License
@@ -337,4 +337,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**GenSteer: Where steering meets generation!** 🎯🚀
+**CALM: Where modulation meets alignment!** 🎯🚀

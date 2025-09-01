@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""GenSteer model architecture."""
+"""CALM model architecture - Controllable Alignment via Logit Modulation."""
 
 import torch
 import torch.nn as nn
@@ -38,8 +38,8 @@ class BaseLanguageModel(nn.Module):
         self.to(self.device)
         self.eval()
         
-        print(f"[GenSteer] Loaded base model: {model_name}")
-        print(f"[GenSteer] Hidden size: {self.hidden_size}, Vocab size: {self.vocab_size}")
+        print(f"[CALM] Loaded base model: {model_name}")
+        print(f"[CALM] Hidden size: {self.hidden_size}, Vocab size: {self.vocab_size}")
     
     def count_parameters(self) -> int:
         """Count total parameters in base model."""
@@ -65,18 +65,18 @@ class BaseLanguageModel(nn.Module):
             position_ids=position_ids,
             past_key_values=past_key_values,
             use_cache=use_cache,
-            output_hidden_states=True,  # Required for steering
+            output_hidden_states=True,  # Required for logit modulation
             return_dict=True
         )
         return outputs
 
 
-class GenerativeSteeringEngine(nn.Module):
-    """Generative Steering Engine with dynamic vector generation."""
+class LogitModulationEngine(nn.Module):
+    """Logit Modulation Engine with dynamic vector generation."""
     
     def __init__(self, hidden_size: int = 4096, vocab_size: int = 32000, 
                  bottleneck_dim: int = 32, max_seq_len: int = 2048, 
-                 max_steering_strength: float = 5.0,
+                 max_modulation_strength: float = 5.0,
                  device: str = "cuda", torch_dtype: torch.dtype = torch.bfloat16):
         super().__init__()
         
@@ -85,16 +85,16 @@ class GenerativeSteeringEngine(nn.Module):
         self.bottleneck_dim = bottleneck_dim
         self.max_seq_len = max_seq_len
         
-        # ============ Generative Steering Mechanism ============
-        # Bottleneck architecture for steering vector generation
+        # ============ Logit Modulation Mechanism ============
+        # Bottleneck architecture for modulation vector generation
         
         # Compression layer: Project hidden states to bottleneck dimension
         self.compress = nn.Linear(hidden_size, bottleneck_dim, bias=False, dtype=torch_dtype)
         
-        # Generation layer: Generate steering vectors in vocabulary space
+        # Generation layer: Generate modulation vectors in vocabulary space
         self.generate = nn.Linear(bottleneck_dim, vocab_size, bias=False, dtype=torch_dtype)
         
-        # Positional awareness for context-sensitive steering
+        # Positional awareness for context-sensitive modulation
         self.pos_encoding = nn.Parameter(
             torch.randn(max_seq_len, hidden_size, dtype=torch_dtype) * 0.01
         )
@@ -102,8 +102,8 @@ class GenerativeSteeringEngine(nn.Module):
         # Regularization
         self.dropout = nn.Dropout(0.1)
         
-        # ============ Automatic Steering Strength Calibration ============
-        # Neural network that learns optimal steering strength per context
+        # ============ Automatic Modulation Strength Calibration ============
+        # Neural network that learns optimal modulation strength per context
         
         self.strength_calibrator = nn.Sequential(
             nn.Linear(hidden_size, hidden_size // 4, dtype=torch_dtype),
@@ -116,8 +116,8 @@ class GenerativeSteeringEngine(nn.Module):
             nn.Sigmoid()  # Outputs normalized strength in [0, 1]
         )
         
-        # Maximum steering strength (expanded range for better exploration)
-        self.max_steering_strength = max_steering_strength
+        # Maximum modulation strength (expanded range for better exploration)
+        self.max_modulation_strength = max_modulation_strength
         
         # Initialize parameters optimally
         self._initialize_parameters()
@@ -125,12 +125,12 @@ class GenerativeSteeringEngine(nn.Module):
         self.to(device)
     
     def _initialize_parameters(self):
-        """Initialize GSE parameters for optimal training."""
+        """Initialize LME parameters for optimal training."""
         with torch.no_grad():
             # Generative mechanism initialization
             # Compress: Normal initialization scaled by input dimension
             nn.init.normal_(self.compress.weight, std=1.0 / self.compress.in_features)
-            # Generate: Zero initialization for minimal initial steering
+            # Generate: Zero initialization for minimal initial modulation
             nn.init.zeros_(self.generate.weight)
             
             # Positional encoding: Small random values
@@ -163,15 +163,15 @@ class GenerativeSteeringEngine(nn.Module):
             return pooled.squeeze(1).view(batch_size, seq_len, self.hidden_size)
     
     def count_parameters(self) -> int:
-        """Count trainable parameters in GSE."""
+        """Count trainable parameters in LME."""
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
     
     def get_engine_info(self) -> Dict[str, Any]:
-        """Get steering engine information."""
+        """Get modulation engine information."""
         param_count = self.count_parameters()
         calibrator_params = sum(p.numel() for name, p in self.named_parameters() 
                                if 'strength_calibrator' in name and p.requires_grad)
-        steering_params = sum(p.numel() for name, p in self.named_parameters() 
+        modulation_params = sum(p.numel() for name, p in self.named_parameters() 
                             if ('compress' in name or 'generate' in name) and p.requires_grad)
         
         return {
@@ -181,28 +181,28 @@ class GenerativeSteeringEngine(nn.Module):
             "parameters": param_count,
             "parameters_M": param_count / 1e6,
             "calibrator_parameters": calibrator_params,
-            "steering_parameters": steering_params,
-            "max_steering_strength": self.max_steering_strength,
+            "modulation_parameters": modulation_params,
+            "max_modulation_strength": self.max_modulation_strength,
         }
     
     def forward(self, hidden_states: torch.Tensor) -> Tuple[torch.Tensor, Dict, torch.Tensor]:
         """
-        Generate steering vectors and calibrate steering strength.
+        Generate modulation vectors and calibrate modulation strength.
         
         Args:
             hidden_states: Last hidden states from base model [B, L, H]
             
         Returns:
-            steering_vector: Generated steering adjustments [B, L, V]
+            modulation_vector: Generated modulation adjustments [B, L, V]
             info: Dictionary with generation info
-            steering_strength: Calibrated steering strength [B, 1]
+            modulation_strength: Calibrated modulation strength [B, 1]
         """
         
         # Adaptive pooling for dimension compatibility  
         pooled_states = self.adaptive_pool(hidden_states)  # [B, L, H]
         batch_size, seq_len, hidden_size = pooled_states.shape
         
-        # ============ Generative Steering Vector Creation ============
+        # ============ Logit Modulation Vector Creation ============
         
         # Add positional information for context awareness
         if seq_len <= self.max_seq_len:
@@ -211,21 +211,21 @@ class GenerativeSteeringEngine(nn.Module):
         else:
             contextualized = self.dropout(pooled_states)
         
-        # Generate steering vectors through bottleneck
+        # Generate modulation vectors through bottleneck
         # Step 1: Compress to bottleneck dimension [B, L, H] → [B, L, D]
         compressed = self.compress(contextualized)
         
-        # Step 2: Generate steering vectors [B, L, D] → [B, L, V]
-        steering_vector = self.generate(compressed)
+        # Step 2: Generate modulation vectors [B, L, D] → [B, L, V]
+        modulation_vector = self.generate(compressed)
         
-        # ============ Automatic Steering Strength Calibration ============
+        # ============ Automatic Modulation Strength Calibration ============
         
         # Compute global context representation
         context_vector = pooled_states.mean(dim=1)  # [B, H]
         
-        # Calibrate steering strength based on context
+        # Calibrate modulation strength based on context
         normalized_strength = self.strength_calibrator(context_vector)  # [B, 1] in [0, 1]
-        steering_strength = normalized_strength * self.max_steering_strength  # [B, 1] in [0, 5.0]
+        modulation_strength = normalized_strength * self.max_modulation_strength  # [B, 1] in [0, 5.0]
         
         # Prepare information dictionary
         info = {
@@ -234,46 +234,46 @@ class GenerativeSteeringEngine(nn.Module):
             "compression_ratio": hidden_size / self.bottleneck_dim,
         }
         
-        return steering_vector, info, steering_strength
+        return modulation_vector, info, modulation_strength
 
 
-class GenSteer(nn.Module):
-    """Complete GenSteer system with base model and steering engine."""
+class CALMModel(nn.Module):
+    """Complete CALM system with base model and modulation engine."""
     
-    def __init__(self, base_model: BaseLanguageModel, steering_engine: GenerativeSteeringEngine):
+    def __init__(self, base_model: BaseLanguageModel, modulation_engine: LogitModulationEngine):
         super().__init__()
         
         self.base_model = base_model
-        self.steering_engine = steering_engine
+        self.modulation_engine = modulation_engine
         
         # Verify vocabulary compatibility
-        assert base_model.vocab_size == steering_engine.vocab_size, \
-            f"Vocabulary mismatch: base={base_model.vocab_size}, steering={steering_engine.vocab_size}"
+        assert base_model.vocab_size == modulation_engine.vocab_size, \
+            f"Vocabulary mismatch: base={base_model.vocab_size}, modulation={modulation_engine.vocab_size}"
     
     def get_system_info(self) -> Dict[str, Any]:
         """Get system information."""
         base_info = self.base_model.get_model_info()
-        engine_info = self.steering_engine.get_engine_info()
+        engine_info = self.modulation_engine.get_engine_info()
         
         return {
-            "system": "GenSteer v1.0",
+            "system": "CALM v1.0",
             "base_model": base_info,
-            "steering_engine": engine_info,
+            "modulation_engine": engine_info,
             "compatibility": {
                 "adaptive_pooling_needed": base_info["hidden_size"] != engine_info["hidden_size"],
                 "pooling_ratio": base_info["hidden_size"] / engine_info["hidden_size"],
                 "vocab_compatible": base_info["vocab_size"] == engine_info["vocab_size"],
             },
-            "architecture": "Generative Steering with Automatic Calibration"
+            "architecture": "Controllable Alignment via Logit Modulation"
         }
     
     def forward(self, input_ids, attention_mask=None, position_ids=None, 
                 past_key_values=None, use_cache=False, return_components=False):
         """
-        Forward pass with automatic steering.
+        Forward pass with automatic logit modulation.
         
-        The model automatically determines optimal steering strength and
-        generates appropriate steering vectors for the input context.
+        The model automatically determines optimal modulation strength and
+        generates appropriate modulation vectors for the input context.
         """
         
         # Get base model outputs
@@ -282,49 +282,49 @@ class GenSteer(nn.Module):
             past_key_values, use_cache
         )
         
-        # Extract hidden states for steering
+        # Extract hidden states for modulation
         last_hidden_states = base_outputs.hidden_states[-1]
         
-        # Generate steering vectors with automatic calibration
-        steering_vector, steering_info, steering_strength = self.steering_engine(last_hidden_states)
+        # Generate modulation vectors with automatic calibration
+        modulation_vector, modulation_info, modulation_strength = self.modulation_engine(last_hidden_states)
         
-        # Apply calibrated steering to base model logits
-        # steering_strength: [B, 1] -> [B, 1, 1] for broadcasting
-        strength_expanded = steering_strength.unsqueeze(-1)
-        steered_logits = base_outputs.logits + strength_expanded * steering_vector
+        # Apply calibrated modulation to base model logits
+        # modulation_strength: [B, 1] -> [B, 1, 1] for broadcasting
+        strength_expanded = modulation_strength.unsqueeze(-1)
+        modulated_logits = base_outputs.logits + strength_expanded * modulation_vector
         
         # Prepare outputs
         outputs = {
-            "logits": steered_logits,
+            "logits": modulated_logits,
             "past_key_values": base_outputs.past_key_values if use_cache else None,
         }
         
         if return_components:
             outputs.update({
                 "base_logits": base_outputs.logits,
-                "steering_vector": steering_vector,
-                "steering_strength": steering_strength,
-                "steering_info": steering_info,
+                "modulation_vector": modulation_vector,
+                "modulation_strength": modulation_strength,
+                "modulation_info": modulation_info,
             })
         
         return outputs
     
-    def generate_with_steering(self, input_ids, max_length=128, temperature=1.0,
+    def generate_with_modulation(self, input_ids, max_length=128, temperature=1.0,
                               do_sample=False, top_p=1.0, attention_mask=None):
         """
-        Generate text with automatic steering calibration.
+        Generate text with automatic modulation calibration.
         
-        The steering strength is automatically determined for each token,
+        The modulation strength is automatically determined for each token,
         adapting to the evolving context during generation.
         """
         
         if input_ids.numel() == 0:
-            return input_ids, {"steering_strengths": [], "avg_steering_strength": 0.0}
+            return input_ids, {"modulation_strengths": [], "avg_modulation_strength": 0.0}
         
         self.eval()
         generated = input_ids.clone()
-        steering_strengths = []
-        steering_norms = []
+        modulation_strengths = []
+        modulation_norms = []
         past_key_values = None
         
         with torch.no_grad():
@@ -337,7 +337,7 @@ class GenSteer(nn.Module):
                     current_input_ids = generated[:, -1:]
                     current_attention_mask = None
                 
-                # Forward pass with automatic steering
+                # Forward pass with automatic modulation
                 outputs = self.forward(
                     current_input_ids, current_attention_mask, 
                     past_key_values=past_key_values, use_cache=True,
@@ -346,9 +346,9 @@ class GenSteer(nn.Module):
                 
                 past_key_values = outputs.get("past_key_values")
                 
-                # Record steering strength for this step
-                steering_strength = outputs["steering_strength"].item()
-                steering_strengths.append(steering_strength)
+                # Record modulation strength for this step
+                modulation_strength = outputs["modulation_strength"].item()
+                modulation_strengths.append(modulation_strength)
                 
                 # Sample next token
                 logits = outputs["logits"][:, -1, :]
@@ -373,10 +373,10 @@ class GenSteer(nn.Module):
                 
                 generated = torch.cat([generated, next_token], dim=1)
                 
-                # Track steering vector norm
-                if "steering_vector" in outputs:
-                    steering_norm = outputs["steering_vector"][:, -1, :].norm(dim=-1).mean().item()
-                    steering_norms.append(steering_norm)
+                # Track modulation vector norm
+                if "modulation_vector" in outputs:
+                    modulation_norm = outputs["modulation_vector"][:, -1, :].norm(dim=-1).mean().item()
+                    modulation_norms.append(modulation_norm)
                 
                 # Stop on EOS token
                 if next_token.item() == self.base_model.model.config.eos_token_id:
@@ -384,22 +384,22 @@ class GenSteer(nn.Module):
         
         # Compile generation statistics
         stats = {
-            "steering_strengths": steering_strengths,
-            "avg_steering_strength": sum(steering_strengths) / len(steering_strengths) if steering_strengths else 0.0,
-            "steering_norms": steering_norms,
-            "avg_steering_norm": sum(steering_norms) / len(steering_norms) if steering_norms else 0.0,
-            "bottleneck_dim": self.steering_engine.bottleneck_dim,
+            "modulation_strengths": modulation_strengths,
+            "avg_modulation_strength": sum(modulation_strengths) / len(modulation_strengths) if modulation_strengths else 0.0,
+            "modulation_norms": modulation_norms,
+            "avg_modulation_norm": sum(modulation_norms) / len(modulation_norms) if modulation_norms else 0.0,
+            "bottleneck_dim": self.modulation_engine.bottleneck_dim,
         }
         
         return generated, stats
 
 
-def create_gensteer(base_model_name: str = "argsearch/llama-7b-sft-float32", 
+def create_calm_model(base_model_name: str = "argsearch/llama-7b-sft-float32", 
                     device: str = "cuda", torch_dtype: torch.dtype = torch.bfloat16,
                     hidden_size: int = 4096, vocab_size: Optional[int] = None, 
-                    bottleneck_dim: int = 32, max_steering_strength: float = 5.0) -> GenSteer:
+                    bottleneck_dim: int = 32, max_modulation_strength: float = 5.0) -> CALMModel:
     """
-    Factory function to create a GenSteer model.
+    Factory function to create a CALM model.
     
     Args:
         base_model_name: Name or path of the base language model
@@ -407,11 +407,11 @@ def create_gensteer(base_model_name: str = "argsearch/llama-7b-sft-float32",
         torch_dtype: Data type for model weights
         hidden_size: Hidden dimension of the model
         vocab_size: Vocabulary size (auto-detected if None)
-        bottleneck_dim: Bottleneck dimension for steering generation
-        max_steering_strength: Maximum steering strength
+        bottleneck_dim: Bottleneck dimension for modulation generation
+        max_modulation_strength: Maximum modulation strength
         
     Returns:
-        Complete GenSteer model ready for training or inference
+        Complete CALM model ready for training or inference
     """
     
     # Load base language model
@@ -421,21 +421,27 @@ def create_gensteer(base_model_name: str = "argsearch/llama-7b-sft-float32",
     if vocab_size is None:
         vocab_size = base_model.vocab_size
     
-    # Create Generative Steering Engine
-    steering_engine = GenerativeSteeringEngine(
+    # Create Logit Modulation Engine
+    modulation_engine = LogitModulationEngine(
         hidden_size=hidden_size,
         vocab_size=vocab_size,
         bottleneck_dim=bottleneck_dim,
-        max_steering_strength=max_steering_strength,
+        max_modulation_strength=max_modulation_strength,
         device=device,
         torch_dtype=torch_dtype
     )
     
-    # Combine into complete GenSteer system
-    gensteer_model = GenSteer(base_model, steering_engine)
+    # Combine into complete CALM system
+    calm_model = CALMModel(base_model, modulation_engine)
     
-    print(f"[GenSteer] Created model with bottleneck dimension {bottleneck_dim}")
-    print(f"[GenSteer] Steering parameters: {steering_engine.count_parameters()/1e6:.1f}M")
-    print(f"[GenSteer] Max steering strength: {steering_engine.max_steering_strength}")
+    print(f"[CALM] Created model with bottleneck dimension {bottleneck_dim}")
+    print(f"[CALM] Modulation parameters: {modulation_engine.count_parameters()/1e6:.1f}M")
+    print(f"[CALM] Max modulation strength: {modulation_engine.max_modulation_strength}")
     
-    return gensteer_model
+    return calm_model
+
+
+# Backward compatibility alias
+def create_gensteer(*args, **kwargs):
+    """Backward compatibility alias for create_calm_model."""
+    return create_calm_model(*args, **kwargs)
